@@ -1,0 +1,159 @@
+{
+  "name": "Chatbot Web - Asisten Informasi Pelatihan (Google Sheets)",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {
+          "title": "Asisten Informasi Pelatihan",
+          "subtitle": "Tanyakan program pelatihan, topik, dan harganya.",
+          "allowedOrigins": "*",
+          "inputPlaceholder": "Contoh: Berapa harga pelatihan AI for Business?"
+        }
+      },
+      "id": "s1",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7c2f9a14-3b6e-4d8a-8f31-5a1b9e0c2d44"
+    },
+    {
+      "parameters": {
+        "promptType": "auto",
+        "options": {
+          "systemMessage": "Kamu adalah \"Asisten Informasi Pelatihan\", chatbot yang menjawab pertanyaan calon peserta tentang program pelatihan, deskripsi topiknya, dan biayanya.\n\nSUMBER DATA: tool \"Get row(s) in sheet in Google Sheets\". Kolom datanya: \"Jenis atau Program Pelatihan\" (Bootcamp atau Skill Up), \"Nama Pelatihan atau Kursus\", \"Deskripsi Topik Pelatihan atau Kursus\", dan \"Biaya atau Harga\".\n\nATURAN:\n1. Untuk SETIAP pertanyaan tentang pelatihan, topik, atau harga, WAJIB panggil tool \"Get row(s) in sheet in Google Sheets\" terlebih dahulu untuk membaca data.\n2. Jawab HANYA berdasarkan data yang ditemukan di tool. DILARANG menebak, mengarang, atau memakai pengetahuan umum untuk harga, jadwal, diskon, atau fasilitas.\n3. Cocokkan pertanyaan dengan makna nama atau topik pelatihan (tidak harus persis sama). Jika pertanyaan mencakup beberapa pelatihan (misalnya \"semua Skill Up\"), tampilkan semua yang sesuai dalam daftar singkat berisi nama dan harga.\n4. Tulis harga persis seperti di data (contoh: Rp15.000.000).\n5. Jika pelatihan atau informasi yang ditanyakan tidak ada di data, jawab: \"Maaf, informasi tersebut belum tersedia di data pelatihan kami.\" Jangan menawarkan informasi lain yang tidak ada di data.\n6. Jika pertanyaan di luar topik pelatihan, tolak dengan sopan dan berikan contoh pertanyaan yang bisa diajukan.\n7. Jawab dalam Bahasa Indonesia yang ramah, jelas, dan singkat."
+        }
+      },
+      "id": "s2",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.8-flash",
+        "options": {}
+      },
+      "id": "s3",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        120,
+        240
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "GANTI",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 5
+      },
+      "id": "s4",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        320,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Membaca seluruh data program pelatihan: jenis program (Bootcamp/Skill Up), nama pelatihan, deskripsi topik, dan biaya. Panggil tool ini untuk setiap pertanyaan tentang pelatihan atau harga.",
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "GANTI_DENGAN_ID_SPREADSHEET_SALINAN_ANDA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "options": {}
+      },
+      "id": "s5",
+      "name": "Get row(s) in sheet in Google Sheets",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        520,
+        240
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GANTI",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
