@@ -1,0 +1,428 @@
+{
+  "name": "Modul: Implementasi AI untuk Keuangan Topik 4: Rekonsiliasi Otomatis",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 20
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        -48
+      ],
+      "id": "a5fabfbe-26ca-471e-bbfa-df2bb04a4b35",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1_LU7q-ru1aZeWByGacSe4sUm6-0BuKQirkTOfMXu0zM",
+          "mode": "list",
+          "cachedResultName": "Salinan dari Dummy Rekonsiliasi",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_LU7q-ru1aZeWByGacSe4sUm6-0BuKQirkTOfMXu0zM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_LU7q-ru1aZeWByGacSe4sUm6-0BuKQirkTOfMXu0zM/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        -144
+      ],
+      "id": "8d01516e-3565-49e6-9436-2c7db39b2aef",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Bdd8IP8ANv0qcmQ3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "1qS0IvLGetMSQ_aGl83J_ujIWUUa-ZxXj",
+          "mode": "list",
+          "cachedResultName": "Dummy Rekonsiliasi - Sheet2.csv",
+          "cachedResultUrl": "https://drive.google.com/file/d/1qS0IvLGetMSQ_aGl83J_ujIWUUa-ZxXj/view?usp=drivesdk"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        224,
+        48
+      ],
+      "id": "1aace2f8-a529-48db-9060-7e4ccc8b4b43",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "HnttoL6af1xyPZGS",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// CODE NODE: CLEAN INTERNAL DATA (REVISI)\nconst results = [];\n\nfor (const item of $input.all()) {\n  const json = item.json;\n\n  // 1. Filter Tipe Transaksi\n  const tipe = json['Tipe Transaksi'];\n  if (tipe !== 'Pembayaran' && tipe !== 'Pengeluaran' && tipe !== 'Penerimaan') {\n    continue; \n  }\n\n  // 2. Bersihkan Tanggal (Hapus spasi & format ulang)\n  // Asumsi format di CSV/Sheet: DD/MM/YYYY\n  const rawDate = (json['Tanggal Transaksi'] || '').toString().trim();\n  const dateParts = rawDate.split('/');\n  // Pastikan date valid\n  if (dateParts.length !== 3) continue;\n  \n  const cleanDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;\n\n  // 3. PENTING: Bersihkan Angka dari titik (.) atau koma (,)\n  // Kita ubah jadi string dulu, hapus semua yang BUKAN angka, baru parse\n  const rawAmount = (json['Jumlah (IDR)'] || '0').toString();\n  const cleanAmount = parseInt(rawAmount.replace(/[^0-9]/g, ''));\n\n  // 4. Buat Match Key\n  const matchKey = `${cleanDate}_${cleanAmount}`;\n\n  results.push({\n    json: {\n      ...json,\n      clean_date: cleanDate,\n      clean_amount: cleanAmount,\n      match_key: matchKey,\n      sumber: 'Internal'\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -144
+      ],
+      "id": "d19b4e72-de73-428d-bf4e-de11ca2b846f",
+      "name": "Filter Baris"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CODE NODE: CLEAN BANK DATA (REVISI)\nconst results = [];\n\nfor (const item of $input.all()) {\n  const json = item.json;\n\n  // 1. Bersihkan Tanggal\n  const rawDate = (json['Tanggal Bank'] || '').toString().trim();\n  const dateParts = rawDate.split('/');\n  if (dateParts.length !== 3) continue;\n\n  const cleanDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;\n\n  // 2. PENTING: Bersihkan Angka (Hapus titik ribuan Rupiah)\n  const rawAmount = (json['Jumlah (IDR)'] || '0').toString();\n  // Regex ini menghapus apa saja yang bukan angka (termasuk titik/koma)\n  const cleanAmount = parseInt(rawAmount.replace(/[^0-9]/g, ''));\n\n  // 3. Buat Match Key\n  const matchKey = `${cleanDate}_${cleanAmount}`;\n\n  results.push({\n    json: {\n      ...json,\n      clean_date: cleanDate,\n      clean_amount: cleanAmount,\n      match_key: matchKey,\n      sumber: 'Bank'\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        48
+      ],
+      "id": "752ebda5-dbf8-41a9-8687-58496d1c816f",
+      "name": "Clean Bank Data"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        896,
+        -48
+      ],
+      "id": "26f606d5-661c-45de-bd6b-34bcdd0eecda",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        48
+      ],
+      "id": "51235783-6516-4dc8-8108-fafa8c00e1ad",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CODE NODE: ANALISA REKONSILIASI LENGKAP (tanpa Union)\nconst items = $input.all();\nconst grouped = {};\n\n// 1. Group by match_key\nfor (const item of items) {\n  const key = item.json.match_key;\n  if (!grouped[key]) {\n    grouped[key] = { sources: [], details: [] };\n  }\n  grouped[key].sources.push(item.json.sumber);\n  grouped[key].details.push(item.json);\n}\n\n// 2. Bangun hasil analisa\nconst results = [];\nfor (const [key, group] of Object.entries(grouped)) {\n  const hasInternal = group.sources.includes('Internal');\n  const hasBank = group.sources.includes('Bank');\n\n  let status, pesan, priority;\n  if (hasInternal && hasBank) {\n    status = 'MATCHED';\n    pesan = '✅ Data klop (Cocok).';\n    priority = 'Low';\n  } else if (hasInternal && !hasBank) {\n    status = 'MISSING IN BANK';\n    pesan = '⚠️ Tercatat di Internal, tapi tidak ada di Bank.';\n    priority = 'High';\n  } else if (!hasInternal && hasBank) {\n    status = 'UNRECORDED INTERNAL';\n    pesan = '⚠️ Ada di Bank, tapi tidak tercatat di Internal.';\n    priority = 'Medium';\n  }\n\n  const internal = group.details.find(d => d.sumber === 'Internal');\n  const bank = group.details.find(d => d.sumber === 'Bank');\n  const refDate = (internal || bank)?.clean_date;\n  const amount = (internal || bank)?.clean_amount;\n\n  results.push({\n    json: {\n      Tanggal: refDate,\n      Nominal: amount,\n      Status: status,\n      Pesan: pesan,\n      Prioritas: priority,\n      Internal_ID: internal?.['ID Referensi'] || 'N/A',\n      Bank_ID: bank?.['ID Transaksi Bank'] || 'N/A',\n      Deskripsi: internal?.Deskripsi || bank?.['Deskripsi Transaksi'] || '-',\n      Match_Key: key,\n      Sources: group.sources.join(' + ')\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -48
+      ],
+      "id": "b5230c7a-89e9-4f5e-acc5-82ab37c2f9de",
+      "name": "Analisis Status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "906c6498-8035-4392-b65a-20e7f7fd1837",
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "MATCHED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1344,
+        -48
+      ],
+      "id": "bb911765-17d4-439f-a815-3c2062d584f1",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1792,
+        48
+      ],
+      "id": "369e865e-1473-4e1c-a02b-a5de7ec8ca5c",
+      "name": "Wait",
+      "webhookId": "91655030-c583-4aa0-b106-b4dfd6f67d18"
+    },
+    {
+      "parameters": {
+        "chatId": "5915873485",
+        "text": "={{ $json.pesan }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        -144
+      ],
+      "id": "8edc48d5-39e0-45b3-8683-8394f154bbbe",
+      "name": "Kirim Data Laporan yang cocok",
+      "webhookId": "d6de140a-3a08-4cde-b534-2fa7bda5e310",
+      "credentials": {
+        "telegramApi": {
+          "id": "hwYgwp9kyViag1Bg",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "5915873485",
+        "text": "={{ $json.pesan }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2016,
+        48
+      ],
+      "id": "b624cf65-d02d-4836-ba56-6ae57d07f9fc",
+      "name": "Kirim Laporan Data yang tidak cocok",
+      "webhookId": "924b97df-a96f-40c2-84f6-ae28459639f8",
+      "credentials": {
+        "telegramApi": {
+          "id": "hwYgwp9kyViag1Bg",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\nif (items.length === 0) return [];\n\nconst esc = s => String(s ?? '-').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fmt = n => Number(n).toLocaleString('id-ID');\nconst cut = (s, n) => { s = String(s ?? '-'); return s.length > n ? s.slice(0, n - 1) + '…' : s; };\nconst short = { 'MATCHED': 'MATCHED', 'MISSING IN BANK': 'MISSING', 'UNRECORDED INTERNAL': 'UNRECORDED' };\n\n// Judul otomatis sesuai isi data\nconst adaSelisih = items.some(r => r.Status !== 'MATCHED');\nconst judul = adaSelisih ? '🚨 LAPORAN SELISIH REKONSILIASI' : '✅ REKAPITULASI REKONSILIASI';\n\n// Ringkasan\nconst count = {};\nitems.forEach(r => { count[r.Status] = (count[r.Status] || 0) + 1; });\nconst total = items.reduce((s, r) => s + (Number(r.Nominal) || 0), 0);\nconst ringkas = Object.entries(count).map(([k, v]) => k + ': ' + v).join(', ');\nconst head = '<b>' + judul + '</b>\\n' + esc(ringkas) + '\\nTotal: Rp ' + fmt(total) + '\\n\\n';\n\n// Data tabel\nconst rows = items.map((r, i) => ({\n  no: String(i + 1),\n  tgl: r.Tanggal,\n  nom: fmt(r.Nominal),\n  st: short[r.Status] || r.Status,\n  ket: cut(r.Deskripsi, 18)\n}));\nconst cols = [['No', 'no', 'r'], ['Tanggal', 'tgl', 'l'], ['Nominal', 'nom', 'r'], ['Status', 'st', 'l'], ['Keterangan', 'ket', 'l']];\nconst w = cols.map(c => Math.max(c[0].length, ...rows.map(r => String(r[c[1]]).length)));\nconst pad = (s, width, a) => a === 'r' ? String(s).padStart(width) : String(s).padEnd(width);\nconst line = vals => vals.map((v, i) => pad(v, w[i], cols[i][2])).join(' | ');\n\nconst header = line(cols.map(c => c[0]));\nconst sep = w.map(x => '-'.repeat(x)).join('-+-');\nconst body = rows.map(r => line(cols.map(c => r[c[1]])));\n\n// Pecah jika melebihi batas pesan Telegram\nconst LIMIT = 3500;\nconst base = head.length + header.length + sep.length + 20;\nconst msgs = [];\nlet cur = [];\nlet len = base;\nfor (const b of body) {\n  if (len + b.length + 1 > LIMIT) { msgs.push(cur); cur = []; len = base; }\n  cur.push(b);\n  len += b.length + 1;\n}\nif (cur.length) msgs.push(cur);\n\nreturn msgs.map((chunk, idx) => ({ json: {\n  pesan: (idx === 0 ? head : '<b>Lanjutan (' + (idx + 1) + '/' + msgs.length + ')</b>\\n\\n')\n       + '<pre>' + esc([header, sep, ...chunk].join('\\n')) + '</pre>'\n} }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        -144
+      ],
+      "id": "f18d8ef0-75b8-4aaf-9377-86f2d3cb9c90",
+      "name": "Rekap Data Match fix"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\nif (items.length === 0) return [];\n\nconst esc = s => String(s ?? '-').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fmt = n => Number(n).toLocaleString('id-ID');\nconst cut = (s, n) => { s = String(s ?? '-'); return s.length > n ? s.slice(0, n - 1) + '…' : s; };\nconst short = { 'MATCHED': 'MATCHED', 'MISSING IN BANK': 'MISSING', 'UNRECORDED INTERNAL': 'UNRECORDED' };\n\n// Judul otomatis sesuai isi data\nconst adaSelisih = items.some(r => r.Status !== 'MATCHED');\nconst judul = adaSelisih ? '🚨 LAPORAN SELISIH REKONSILIASI' : '✅ REKAPITULASI REKONSILIASI';\n\n// Ringkasan\nconst count = {};\nitems.forEach(r => { count[r.Status] = (count[r.Status] || 0) + 1; });\nconst total = items.reduce((s, r) => s + (Number(r.Nominal) || 0), 0);\nconst ringkas = Object.entries(count).map(([k, v]) => k + ': ' + v).join(', ');\nconst head = '<b>' + judul + '</b>\\n' + esc(ringkas) + '\\nTotal: Rp ' + fmt(total) + '\\n\\n';\n\n// Data tabel\nconst rows = items.map((r, i) => ({\n  no: String(i + 1),\n  tgl: r.Tanggal,\n  nom: fmt(r.Nominal),\n  st: short[r.Status] || r.Status,\n  ket: cut(r.Deskripsi, 18)\n}));\nconst cols = [['No', 'no', 'r'], ['Tanggal', 'tgl', 'l'], ['Nominal', 'nom', 'r'], ['Status', 'st', 'l'], ['Keterangan', 'ket', 'l']];\nconst w = cols.map(c => Math.max(c[0].length, ...rows.map(r => String(r[c[1]]).length)));\nconst pad = (s, width, a) => a === 'r' ? String(s).padStart(width) : String(s).padEnd(width);\nconst line = vals => vals.map((v, i) => pad(v, w[i], cols[i][2])).join(' | ');\n\nconst header = line(cols.map(c => c[0]));\nconst sep = w.map(x => '-'.repeat(x)).join('-+-');\nconst body = rows.map(r => line(cols.map(c => r[c[1]])));\n\n// Pecah jika melebihi batas pesan Telegram\nconst LIMIT = 3500;\nconst base = head.length + header.length + sep.length + 20;\nconst msgs = [];\nlet cur = [];\nlet len = base;\nfor (const b of body) {\n  if (len + b.length + 1 > LIMIT) { msgs.push(cur); cur = []; len = base; }\n  cur.push(b);\n  len += b.length + 1;\n}\nif (cur.length) msgs.push(cur);\n\nreturn msgs.map((chunk, idx) => ({ json: {\n  pesan: (idx === 0 ? head : '<b>Lanjutan (' + (idx + 1) + '/' + msgs.length + ')</b>\\n\\n')\n       + '<pre>' + esc([header, sep, ...chunk].join('\\n')) + '</pre>'\n} }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        48
+      ],
+      "id": "12d1cac7-32a4-4a75-9c1d-f5b13a6cdf98",
+      "name": "Rekap Data UNMATCHED"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Filter Baris",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Baris": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Bank Data": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Analisis Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Clean Bank Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analisis Status": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Rekap Data Match fix",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rekap Data UNMATCHED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Kirim Laporan Data yang tidak cocok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rekap Data Match fix": {
+      "main": [
+        [
+          {
+            "node": "Kirim Data Laporan yang cocok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rekap Data UNMATCHED": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "8f335f64-6972-48a7-a681-be456de08d02",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc96f10ae7dc95d3c138575ba243a0a167923dbcb524841d451aadf9135d5fb3"
+  },
+  "nodeGroups": [],
+  "id": "ABXv1GjLru8vJ0cb",
+  "tags": []
+}
