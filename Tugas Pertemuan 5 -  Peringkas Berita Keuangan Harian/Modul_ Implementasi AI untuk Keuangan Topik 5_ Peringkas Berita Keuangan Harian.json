@@ -1,0 +1,365 @@
+{
+  "name": "Modul: Implementasi AI untuk Keuangan Topik 5: Peringkas Berita Keuangan Harian",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "id": "5b6c61ec-533a-4760-9b03-bf042db0fcd6",
+      "name": "Schedule Trigger 07:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.cnbcindonesia.com/market/rss",
+        "options": {}
+      },
+      "id": "895b2cd3-03d5-44e4-a8c5-0c11bbf575c0",
+      "name": "RSS CNBC Indonesia",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://finance.detik.com/rss",
+        "options": {}
+      },
+      "id": "15d4c9e8-59ad-407d-acb0-d6901dccbfca",
+      "name": "RSS Detik Finance",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "dbce56fd-9bd1-43a7-832a-224348b75fe1",
+      "name": "Limit CNBC (5)",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "c718da47-b454-4d20-8d2c-d0324b2d55b6",
+      "name": "Limit Detik (5)",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        448,
+        192
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "0f8f6621-d635-47aa-ae60-06a14cd56c7b",
+      "name": "Gabungkan Sumber (Append)",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        672,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.link }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "e9950850-34b7-4879-aac5-825422fe4ca4",
+      "name": "Unduh Halaman Web",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        96
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "text",
+              "cssSelector": ".detail_text, .detail__body-text",
+              "skipSelectors": "script, style, .parallaxindetail, .staticdetail_container, table"
+            }
+          ]
+        },
+        "options": {
+          "trimValues": true,
+          "cleanUpText": true
+        }
+      },
+      "id": "620fb1a9-bee6-4ad4-971e-20624a1b1964",
+      "name": "Extract HTML (Body Berita)",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "23d39a15-2097-4ef7-bdea-499323fd7757",
+      "name": "Menggabungkan menjadi Satu Konteks",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Anda adalah analis pasar keuangan Indonesia yang menyusun briefing pagi untuk tim investasi.\n\nTUGAS:\nBaca kumpulan artikel berita di bawah, lalu ringkas menjadi \"5 Poin Utama Pergerakan Pasar Hari Ini\".\n\nATURAN:\n- Tepat 5 poin, urut dari yang paling berdampak pada pasar.\n- Setiap poin maksimal 2 kalimat, memuat angka/data penting (IHSG, kurs, harga komoditas, suku bunga, dsb.) jika tersedia.\n- Gunakan hanya informasi dari artikel. Jangan berspekulasi atau menambah data di luar teks.\n- Bahasa Indonesia yang ringkas dan profesional.\n- Format teks biasa tanpa markdown, tanpa tanda bintang.\n\nFORMAT KELUARAN:\n📊 5 Poin Utama Pergerakan Pasar Hari Ini\n{{ $now.toFormat('dd LLL yyyy') }}\n\n1. ...\n2. ...\n3. ...\n4. ...\n5. ...\n\nARTIKEL BERITA:\n{{ $json.text.map(t => (t || '').slice(0, 2000)).join('\\n\\n---\\n\\n') }}"
+      },
+      "id": "2afd8c92-70b2-4bdc-9b7a-35a3118909a2",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        1568,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "5915873485",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "7f215bcb-ffb3-4a25-b131-c9cfdbd49a8c",
+      "name": "Kirim ke Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1920,
+        96
+      ],
+      "webhookId": "32ed71b8-4df2-445e-bc81-082925b98ad4",
+      "credentials": {
+        "telegramApi": {
+          "id": "hwYgwp9kyViag1Bg",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "poolside/laguna-s-2.1:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1640,
+        328
+      ],
+      "id": "4de17107-63b0-44c4-a63a-f7fc570dbe3a",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "3DbRpxOVcxu7dRVH",
+          "name": "OpenRouter account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger 07:00": {
+      "main": [
+        [
+          {
+            "node": "RSS CNBC Indonesia",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS Detik Finance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS CNBC Indonesia": {
+      "main": [
+        [
+          {
+            "node": "Limit CNBC (5)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Detik Finance": {
+      "main": [
+        [
+          {
+            "node": "Limit Detik (5)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit CNBC (5)": {
+      "main": [
+        [
+          {
+            "node": "Gabungkan Sumber (Append)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit Detik (5)": {
+      "main": [
+        [
+          {
+            "node": "Gabungkan Sumber (Append)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Gabungkan Sumber (Append)": {
+      "main": [
+        [
+          {
+            "node": "Unduh Halaman Web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unduh Halaman Web": {
+      "main": [
+        [
+          {
+            "node": "Extract HTML (Body Berita)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract HTML (Body Berita)": {
+      "main": [
+        [
+          {
+            "node": "Menggabungkan menjadi Satu Konteks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Menggabungkan menjadi Satu Konteks": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Kirim ke Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "eada3ef2-0d8e-4d74-a34d-c2def369d857",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc96f10ae7dc95d3c138575ba243a0a167923dbcb524841d451aadf9135d5fb3"
+  },
+  "nodeGroups": [],
+  "id": "Zwl0ECwH0cY7hrWU",
+  "tags": []
+}
