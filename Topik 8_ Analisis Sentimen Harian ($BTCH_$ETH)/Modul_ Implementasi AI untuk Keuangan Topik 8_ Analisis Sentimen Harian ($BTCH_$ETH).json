@@ -1,0 +1,425 @@
+{
+  "name": "Modul: Implementasi AI untuk Keuangan Topik 8: Analisis Sentimen Harian ($BTCH_$ETH)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        112
+      ],
+      "id": "09d7ff1f-dbba-4ca8-ad79-d17c385d72be",
+      "name": "Tiap 15 menit"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze the sentiment of the following tweet. Respond ONLY with ONE word: 'Positive', 'Negative', or 'Neutral'.\n\nTweet:\n{{ $json.text }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        688,
+        112
+      ],
+      "id": "120806f4-6bc2-406a-b5f9-f27894930dcf",
+      "name": "Analisis Sentimen"
+    },
+    {
+      "parameters": {
+        "model": "cohere/north-mini-code:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        720,
+        304
+      ],
+      "id": "a84d102a-8df8-4f85-a72c-41ccebf43643",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "8xnARRRmDreZoBcV",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        544
+      ],
+      "id": "74e56e8a-a018-4060-936d-66d17fc61a86",
+      "name": "Tiap jam 7 pagi"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1inRFDnJy0axVtGtovoN8P3AZamo-hkliVSSTtABTO0A",
+          "mode": "list",
+          "cachedResultName": "Percakapan tentang $BTC dan $ETH",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1inRFDnJy0axVtGtovoN8P3AZamo-hkliVSSTtABTO0A/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1inRFDnJy0axVtGtovoN8P3AZamo-hkliVSSTtABTO0A/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        544
+      ],
+      "id": "7b88a392-3b01-40ef-9819-7624b5121982",
+      "name": "Baca Data",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "NLIho8mmNfuCF3W8",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Menghitung total dan persentase tiap sentimen\nconst rows = $input.all();\nlet positive = 0, negative = 0, neutral = 0;\n\nfor (const row of rows) {\n  const s = String(row.json.Sentiment || '').trim().toLowerCase();\n  if (s.startsWith('positive')) positive++;\n  else if (s.startsWith('negative')) negative++;\n  else if (s.startsWith('neutral')) neutral++;\n}\n\nconst total = positive + negative + neutral;\nconst pct = (n) => total ? Math.round((n / total) * 1000) / 10 : 0;\n\nconst stats = [\n  { label: 'Positif', count: positive, persen: pct(positive) },\n  { label: 'Negatif', count: negative, persen: pct(negative) },\n  { label: 'Netral',  count: neutral,  persen: pct(neutral) },\n];\nconst dominan = stats.slice().sort((a, b) => b.count - a.count)[0];\n\nreturn [{\n  json: {\n    total, positive, negative, neutral,\n    persen_positive: pct(positive),\n    persen_negative: pct(negative),\n    persen_neutral: pct(neutral),\n    sentimen_dominan: total ? dominan.label : 'Tidak ada data',\n    persen_dominan: total ? dominan.persen : 0,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        544
+      ],
+      "id": "a3c21599-12bc-4923-a654-ec07da2d53e3",
+      "name": "Analisis Data"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Kamu adalah analis sentimen media sosial untuk aset kripto ($BTC dan $ETH).\nBerikut statistik sentimen tweet yang terkumpul:\n- Total tweet: {{ $json.total }}\n- Positif: {{ $json.positive }} ({{ $json.persen_positive }}%)\n- Negatif: {{ $json.negative }} ({{ $json.persen_negative }}%)\n- Netral: {{ $json.neutral }} ({{ $json.persen_neutral }}%)\n- Sentimen dominan: {{ $json.sentimen_dominan }} ({{ $json.persen_dominan }}%)\n\nTulis kesimpulan pasar harian singkat (maksimal 4 kalimat) dalam Bahasa Indonesia: sebutkan persentase dominasi sentimen, artinya secara kualitatif, dan catatan kehati-hatian bahwa ini bukan saran investasi. Jika total tweet 0, katakan data belum tersedia.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        672,
+        544
+      ],
+      "id": "f125e0af-7668-4255-8722-4e40956c55ab",
+      "name": "Membuat Kesimpulan"
+    },
+    {
+      "parameters": {
+        "model": "cohere/north-mini-code:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        752,
+        768
+      ],
+      "id": "b8b29544-eebb-42f1-b5a8-c78e516ccce0",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "8xnARRRmDreZoBcV",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "5915873485",
+        "text": "=📊 Sentimen Harian $BTC & $ETH\n\n{{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1024,
+        544
+      ],
+      "id": "340cdb74-a859-42b3-b45c-ee451eae2d19",
+      "name": "Kirim Laporan",
+      "webhookId": "71e5fdc3-c313-4340-9a2e-accba2f9561d",
+      "credentials": {
+        "telegramApi": {
+          "id": "hwYgwp9kyViag1Bg",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1inRFDnJy0axVtGtovoN8P3AZamo-hkliVSSTtABTO0A",
+          "mode": "list",
+          "cachedResultName": "Percakapan tentang $BTC dan $ETH",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1inRFDnJy0axVtGtovoN8P3AZamo-hkliVSSTtABTO0A/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1inRFDnJy0axVtGtovoN8P3AZamo-hkliVSSTtABTO0A/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Waktu": "={{ $('Pembersih Teks').item.json.created_at }}",
+            "ID Tweet": "={{ $('Pembersih Teks').item.json.id }}",
+            "Teks": "={{ $('Pembersih Teks').item.json.text }}",
+            "Sentiment": "={{ $json.text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Waktu",
+              "displayName": "Waktu",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ID Tweet",
+              "displayName": "ID Tweet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Teks",
+              "displayName": "Teks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sentiment",
+              "displayName": "Sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1024,
+        112
+      ],
+      "id": "4c2729c0-ab6a-46e1-a210-8286ce6947cc",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "NLIho8mmNfuCF3W8",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://mastodon.social/api/v1/timelines/tag/bitcoin",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        112
+      ],
+      "id": "a20e3bb7-f5eb-44f9-9ac4-2a3ae45cffcf",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const clean = (html) => String(html || '')\n  .replace(/<[^>]*>/g, ' ')\n  .replace(/&amp;/g, '&')\n  .replace(/&quot;/g, '\"')\n  .replace(/&#39;/g, \"'\")\n  .replace(/&lt;/g, '<')\n  .replace(/&gt;/g, '>')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst relevan = /(\\$?\\b(btc|eth)\\b|bitcoin|ethereum)/i;\nconst spam = /(bitcoincash|\\bbch\\b)/i;\nconst kataInggris = /\\b(the|and|is|are|this|that|with|will|has|have|was|to|of|for|it|be|you|on)\\b/gi;\nconst seen = new Set();\n\nreturn $input.all()\n  .map(i => ({\n    json: {\n      id: i.json.id,\n      text: clean(i.json.content),\n      created_at: i.json.created_at,\n    }\n  }))\n  .filter(i => {\n    const t = i.json.text;\n    if (!t || !relevan.test(t) || spam.test(t)) return false;\n    // hanya teks berbahasa Inggris: minimal 3 kata umum Inggris\n    if ((t.match(kataInggris) || []).length < 3) return false;\n    // buang duplikat (abaikan nama akun @...)\n    const key = t.replace(/\\S*@\\S*/g, '').slice(0, 60).toLowerCase();\n    if (seen.has(key)) return false;\n    seen.add(key);\n    return true;\n  });"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        112
+      ],
+      "id": "e468a307-377c-42f8-8bfe-a127456d87f9",
+      "name": "Pembersih Teks"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Tiap 15 menit": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analisis Sentimen": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Analisis Sentimen",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tiap jam 7 pagi": {
+      "main": [
+        [
+          {
+            "node": "Baca Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baca Data": {
+      "main": [
+        [
+          {
+            "node": "Analisis Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analisis Data": {
+      "main": [
+        [
+          {
+            "node": "Membuat Kesimpulan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Membuat Kesimpulan": {
+      "main": [
+        [
+          {
+            "node": "Kirim Laporan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Membuat Kesimpulan",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Pembersih Teks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pembersih Teks": {
+      "main": [
+        [
+          {
+            "node": "Analisis Sentimen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a97789a7-2527-4812-a919-f26675ccae96",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc96f10ae7dc95d3c138575ba243a0a167923dbcb524841d451aadf9135d5fb3"
+  },
+  "nodeGroups": [],
+  "id": "W2lNKRoFedBkld7K",
+  "tags": []
+}
